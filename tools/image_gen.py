@@ -6,7 +6,7 @@ from langchain.tools import tool
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-CLIENT = OpenAI(api_key="sk-boQYeHnjCR5rUqoUVj6XvrvfJM9E9ulMo1dLwfzCBTT3BlbkFJPOyI-dqZavW9-mnN8jTBhRKRSiQ0oqVJgPspORtokA")
+CLIENT = OpenAI(api_key="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")
 
 
 class GenerateImageInput(BaseModel):
@@ -29,4 +29,3 @@ def generate_image(image_description: str) -> str:
     image_url = response.data[0].url
     return image_url
 # if __name__ == "__main__":  #this is just test
-#  print(generate_image.run("a picture of kaiden simon, a cute little jewish boy"))
