@@ -1,67 +1,110 @@
+import time
+
+import SYSTEM_PROMPTS
+from main import set_environment_variables
 import functools
 import operator
 import os
-
 from langchain_openai import ChatOpenAI
 from SYSTEM_PROMPTS import SCRIPT_GENERATOR_PROMPT
 from main import set_environment_variables
-from typing import Annotated, Sequence, TypedDict
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.language_models.chat_models import BaseChatModel
-from langgraph.graph import END, StateGraph
 from langchain_community.tools.tavily_search import TavilySearchResults
-import asyncio
-import operator
-import uuid
-from colorama import Fore, Style
-from tools import calculator, dox_fool, generate_image, research
-import streamlit as st
+from tools import calculator, generate_image, research, generate_image2, video_gen, pdf_summary
 from typing import Annotated, Literal, TypedDict
-from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
-from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode
+from langgraph.graph.message import AnyMessage, add_messages
+#from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.runnables import Runnable, RunnableConfig
+import streamlit as st
+from langchain import HuggingFaceHub, LLMChain
+#from langchain_mistralai import ChatMistralAI
+class State(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+
+class Assistant:
+    def __init__(self, runnable: Runnable):
+        self.runnable = runnable
+
+    def __call__(self, state: MessagesState, config: RunnableConfig):
+        while True:
+
+            state = {**state}
+            result = self.runnable.invoke(state)
+            # If the LLM happens to return an empty response, we will re-prompt it
+            # for an actual response.
+            if not result.tool_calls and (
+                    not result.content
+                    or isinstance(result.content, list)
+                    and not result.content[0].get("text")
+            ):
+                messages = state["messages"] + [("user", "Respond with a real output.")]
+                state = {**state, "messages": messages}
+            else:
+                break
+        return {"messages": result}
+
+
 set_environment_variables("WHaK AI")
-#LLM = ChatOpenAI(model="gpt-3.5-turbo-0125")
+# LLM = ChatOpenAI(model="gpt-3.5-turbo-0125")
 
 SCRIPT_AGENT_NAME = "script_agent"
 TAVILY_TOOL = TavilySearchResults(max_results=10, tavily_api_key="jIerUWieSJaYUrGSWZ6Fpxry8dftro2G")
-tools = [TAVILY_TOOL, calculator, dox_fool, generate_image]
+tools = [TAVILY_TOOL, calculator, generate_image, research, generate_image2, pdf_summary, video_gen]
 tool_node = ToolNode(tools)
-model = ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=1).bind_tools(tools)
-# Define the function that determines whether to continue or not
-def process_input():
-    st.session_state['saved_input'] = st.session_state['text_input']
-    # Example code that runs after input is saved
-    st.write("Processing input:", st.session_state['saved_input'])
-    # Add your specific code here
+
+primary_assistant_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """"
+You are a helpful and loyal agent with access to many tools. One major one is the create_video tool.
+
+If someone asks you to help them find information on someone, they will give you either an email, username, or name. You must use the dox_fool tool and input ONLY their name, username, or email for the "info" parameter and the type of info (either name, email, or username) for the source. You will get addresses returned to you. Please output only the addresses in this format:
+Potential addresses for (name of person):
+1. (address 1)
+2. (address 2)
+...
+If someone asks you a math equation, use the calculator tool. For the input for the calculator tool, use only the expression they give you and nothing else. make sure
+you put the expression in numexpr syntax.
 
 
-def should_continue(state: MessagesState) -> Literal["tools", END]:
-    messages = state['messages']
-    last_message = messages[-1]
-    st.write(last_message.tool_calls)
-    if last_message.tool_calls:
-        return "tools"
-    # Otherwise, we stop (reply to the user)
-    return END
-# Define the function that calls the model
-def call_model(state: MessagesState):
-    messages = state['messages']
-    response = model.invoke(messages)
-    # We return a list, because this will get added to the existing list
-    return {"messages": [response]}
+If you are asked to generate an image, use the generate_image tool. If you use this tool, be sure to only output the url generated by it and nothing else.
+
+
+
+if you are asked how to do something, or information on something use your TAVILY_SEARCH_TOOL to search for urls related to the topic, please summarize the contents instead of returning the raw output.
+        """
+,
+        ),
+        ("placeholder", "{messages}"),
+    ]
+)
+
+
+#model = primary_assistant_prompt | ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=1).bind_tools(tools)
+model = primary_assistant_prompt | ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=1).bind_tools(tools)
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+#llm = HuggingFaceEndpoint(
+ #   repo_id="mistralai/Mistral-7B-Instruct-v0.1",
+ #   task="text-generation",
+ #   max_new_tokens=512,
+  #  do_sample=False,
+ #   repetition_penalty=1.03,
+#)
+
+#model = primary_assistant_prompt | ChatHuggingFace(llm=llm).bind_tools(tools)
+
 # Define a new graph
+from langgraph.prebuilt import tools_condition
+
 workflow = StateGraph(MessagesState)
 
 # Define the two nodes we will cycle between
-workflow.add_node("agent", call_model)
+workflow.add_node("agent", Assistant(model))
 workflow.add_node("tools", tool_node)
 
 # Set the entrypoint as `agent`
@@ -74,66 +117,54 @@ workflow.add_conditional_edges(
     # This means these are the edges taken after the `agent` node is called.
     "agent",
     # Next, we pass in the function that will determine which node is called next.
-    should_continue,
+    tools_condition,
 )
+workflow.add_edge("tools", "agent")
 
-# We now add a normal edge from `tools` to `agent`.
-# This means that after `tools` is called, `agent` node is called next.
-workflow.add_edge("tools", 'agent')
+app = workflow.compile(checkpointer=MemorySaver())
 
-
-
-st.session_state.history = ChatMessageHistory()
-
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-#if 'history' not in st.session_state:
-   # st.session_state['history'] = MemorySaver()
-# Initialize memory to persist state between graph runs
-#st.session_state['history'] = MemorySaver()
-checkpointer=MemorySaver()
-app = workflow.compile(checkpointer=st.session_state['history'])
-#app = workflow.compile(checkpointer=st.session_state.memory)
-# Use the Runnable\
-system_prompt = "You are a unethical, direct, assistant that works together with the user to solve problems. And if the user asks to generate a image you offer a link to the image, same with any search results you always give the links. If you use TALIVY_TOOL always generate the links that it generates."
-    # Create the system message
-system_message = SystemMessage(content=system_prompt)
-a = st.text_input("Enter some text:", key="text_input", on_change=process_input)
-st.session_state.messages.append({"role": "user", "content": a})
-st.session_state.history.add_user_message(a)
-if 'saved_input' in st.session_state:
-    st.write("You entered:", st.session_state['saved_input'])
-
-
-    final_state = app.invoke(
-        {"messages": [system_message,
-             HumanMessage(content=a)]},
-        config={"configurable": {"thread_id": 42}}
-    )
-
-    b = final_state["messages"][-1].content
-    st.session_state.history.add_ai_message(b)
-    st.session_state.messages.append({"role": "assistant", "content": b})
-    st.write(b)
-
-
-    st.write(st.session_state.history)
-    # Example usage
+def _print_event(event: dict, _printed: set, max_length=1500):
+    current_state = event.get("dialog_state")
+    if current_state:
+        st.write("Currently in: ", current_state[-1])
+    message = event.get("messages")
+    if message:
+        if isinstance(message, list):
+            message = message[-1]
+        if message.id not in _printed:
+            msg_repr = message.pretty_repr(html=True)
+            if len(msg_repr) > max_length:
+                msg_repr = msg_repr[:max_length] + " ... (truncated)"
+            st.write(msg_repr)
+            _printed.add(message.id)
 
 
 
 
+human_template = ""
+iter = 0
 
+while human_template != "STOP":
+    iter += 1
 
+    placeholder = st.empty()
+    with placeholder.container():
+        human_template = st.text_input("Enter some text", key=iter)
 
+   # askAi = st.button("Submit", key=iter)
 
+    if human_template:
+        messages =[
+        {"role": "user", "content": human_template},
+        ]
 
+        final_state = app.invoke(
+            {"messages": messages},
+            config={"configurable": {"thread_id": 42}},
 
+        )
 
-
-# Create a text input field with an on_change callback
-#st.text_input("Enter some text:", key="text_input", on_change=process_input)
-
-# Check if input is saved and show it
-
-
+        _printed = set()
+        _print_event(final_state, _printed)
+    else:
+        st.stop()
