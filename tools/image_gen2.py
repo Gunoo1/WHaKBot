@@ -1,17 +1,11 @@
-import uuid
 from pathlib import Path
 import requests
 import base64
-from PIL import Image
-from io import BytesIO
-
-from mimetypes import MimeTypes
-
 
 from langchain.tools import tool
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from aws_link import upload_to_aws
 
 #CLIENT = OpenAI(api_key="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")
 
@@ -19,13 +13,13 @@ api_key = "key-1TsWZR2IduvodtQnD8Fz646mavmu3Id500FTck88qAqu98XVQ4k1IfbF6EuPz7GHW
 
 class GenerateImageInput(BaseModel):
     image_description: str = Field(
-        description="A detailed description of the desired image."
+        description="A detailed description of the desired image. Must be a SINGLE STRING"
     )
 
 
-@tool("generate_image2", args_schema=GenerateImageInput)
-def generate_image2(image_description: str) -> str:
-    """Call to generate an image with flux and make sure to remind the user to ask for a link in order to get it"""
+@tool("generate_image_flux", args_schema=GenerateImageInput)
+def generate_image_flux(image_description: str) -> str:
+    """Input must be a SINGLE string. Call to generate an image and make sure to remind the user to ask for a link in order to get it"""
 
     url = "https://api.getimg.ai/v1/flux-schnell/text-to-image"
     t2i_headers = {
@@ -65,9 +59,10 @@ def generate_image2(image_description: str) -> str:
     print(f"Image saved to {image_path}")
 
 
+    return upload_to_aws(image_path.as_posix())
 
-    return response.url
 
 
-if __name__ == "__main__":  #this is just test
-    print(generate_image.run("a picture of a crab"))
+
+#if __name__ == "__main__":  #this is just test
+    #print(generate_image.run("a picture of a crab"))
