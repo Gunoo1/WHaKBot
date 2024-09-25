@@ -1,6 +1,7 @@
 from .calculator import  calculator
 from .database_webscraper import database_webscraper
 from .image_gen import generate_image
+from .image_gen2 import generate_image_flux
 from .web import research
 from .RAG import RAG_TOOL
 from .image_gen2 import generate_image2
