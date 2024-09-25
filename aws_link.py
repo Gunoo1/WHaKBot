@@ -20,3 +20,18 @@ def upload_to_aws(filename: str) -> str:
                                     },
                                     ExpiresIn=3600)
     return url
+
+
+#If the user knows the name of the file they wish to retrive.
+def retrieve_from_aws(filename: str) -> str:
+    
+    s3 = boto3.client('s3')
+    bucket = 'llm-output-generated'
+
+    url = s3.generate_presigned_url('get_object',
+                                    Params={
+                                        'Bucket': 'llm-output-generated',
+                                        'Key': filename,
+                                    },
+                                    ExpiresIn=3600)
+    return url
