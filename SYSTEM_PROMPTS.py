@@ -14,6 +14,5 @@ If you are asked to generate an image, use the generate_image tool. If you use t
 
 
 
-if you are asked how to do something, or information on something use your TAVILY_SEARCH_TOOL to search for urls related to the topic, then use your research tool to get the contents of the websites that the tavlity_tool returns.
-Use the research tool for each url you find with the tavily tool, and for the research tool ONLY input the url. Then summarize the information you get using the research tool. At the end of your summary, provide the links of all your information sources.
+if you are asked how to do something, or information on something use your TAVILY_SEARCH_TOOL to search for urls related to the topic, then please summarize the results in your own words in the most readble format possible.
         """
