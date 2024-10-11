@@ -1,11 +1,12 @@
 import argparse
-from langchain_community.vectorstores.chroma import Chroma
+from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
 from tools.getembedding import get_embedding_function
 from langchain import HuggingFaceHub, LLMChain
+from main import set_environment_variables
 
 
-CHROMA_PATH = "../../TaAI/Chroma"
+CHROMA_PATH = r'C:\Users\shija\PycharmProjects\pythonProject1\AssistentGPT\chroma'
 
 PROMPT_TEMPLATE = """
 Answer the question based only on the following context:
@@ -27,6 +28,7 @@ def main():
 
 
 def query_rag(query_text: str):
+
   # Prepare the DB.
   embedding_function = get_embedding_function()
   
@@ -61,6 +63,6 @@ def query_rag(query_text: str):
   return response_text
 
 
-if __name__ == "__main__":
-  main()
+#if __name__ == "__main__":
+  #query_rag("The complement operation can be applied to a single variable or to?")
   

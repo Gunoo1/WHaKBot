@@ -17,7 +17,7 @@ def get_embedding_function():
     #embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 
-    embeddings = OpenAIEmbeddings(openai_api_key= os.getenv("OPENAI_API_KEY"), model="text-embedding-3-small")    
+    embeddings = OpenAIEmbeddings(openai_api_key= os.getenv("OPENAI_API_KEY"))
     return embeddings
 
 
